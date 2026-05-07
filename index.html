@@ -1,0 +1,476 @@
+login.php
+<?php
+/**
+ * login.php — Halaman Login Admin
+ * Username: nuba | Password: 123
+ */
+
+session_start();
+
+// Jika sudah login, langsung ke dashboard
+if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+    header("Location: dashboard.php");
+    exit();
+}
+
+$error = '';
+
+// Proses login saat form disubmit
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = $_POST['username'] ?? '';
+    $password = $_POST['password'] ?? '';
+
+    // Validasi login sederhana (logika if — sesuai KTI)
+    if ($username === 'nuba' && $password === '123') {
+        $_SESSION['admin_logged_in'] = true;
+        $_SESSION['admin_username'] = $username;
+        header("Location: dashboard.php");
+        exit();
+    } else {
+        $error = 'Username atau password salah!';
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Admin — Kas Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+
+<div class="w-full max-w-md px-4">
+    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+        <!-- Header hijau -->
+        <div class="bg-green-700 px-6 py-8 text-center">
+            <div class="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">
+                🔐
+            </div>
+            <h1 class="text-xl font-bold text-white">Login Admin</h1>
+            <p class="text-green-200 text-sm mt-1">Masuk untuk mengelola data kas</p>
+        </div>
+
+        <!-- Form -->
+        <div class="p-6">
+            <?php if ($error): ?>
+                <div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl mb-4 text-sm">
+                    ⚠️ <?= htmlspecialchars($error) ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="POST" action="login.php" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input
+                        type="text"
+                        name="username"
+                        placeholder="Masukkan username"
+                        required
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input
+                        type="password"
+                        name="password"
+                        placeholder="Masukkan password"
+                        required
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                </div>
+                <button
+                    type="submit"
+                    class="w-full bg-green-700 hover:bg-green-800 text-white font-semibold py-2.5 rounded-xl transition mt-2">
+                    Masuk →
+                </button>
+            </form>
+
+            <p class="text-center text-sm text-gray-400 mt-4">
+                <a href__="index.php" class="text-green-600 hover:underline">← Kembali ke halaman siswa</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+📄 5. dashboard.php
+<?php
+/**
+ * dashboard.php — Halaman Admin
+ * Hanya bisa diakses setelah login
+ */
+
+// Cek login — include auth.php untuk validasi session
+require_once 'auth.php';
+
+$dataFile = 'transactions.json';
+$message = '';
+$messageType = '';
+
+// Fungsi baca transaksi dari JSON
+function bacaTransaksi($file) {
+    if (!file_exists($file)) {
+        file_put_contents($file, '[]');
+        return [];
+    }
+    $json = file_get_contents($file);
+    $data = json_decode($json, true);
+    return ($data !== null) ? $data : [];
+}
+
+// Fungsi simpan transaksi ke JSON
+function simpanTransaksi($file, $data) {
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}
+
+// Fungsi format Rupiah
+function formatRupiah($angka) {
+    return 'Rp ' . number_format($angka, 0, ',', '.');
+}
+
+// ==============================
+// PROSES: TAMBAH TRANSAKSI
+// ==============================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi']) && $_POST['aksi'] === 'tambah') {
+    $tanggal    = trim($_POST['tanggal'] ?? '');
+    $keterangan = trim($_POST['keterangan'] ?? '');
+    $jenis      = $_POST['jenis'] ?? 'pemasukan';
+    $jumlah     = (int) ($_POST['jumlah'] ?? 0);
+
+    if ($tanggal && $keterangan && $jumlah > 0) {
+        $transaksi = bacaTransaksi($dataFile);
+
+        // Buat ID unik berdasarkan waktu
+        $idBaru = time();
+
+        $transaksi[] = [
+            'id'          => $idBaru,
+            'tanggal'     => $tanggal,
+            'keterangan'  => $keterangan,
+            'jenis'       => $jenis,
+            'jumlah'      => $jumlah,
+        ];
+
+        simpanTransaksi($dataFile, $transaksi);
+        $message = 'Transaksi berhasil ditambahkan!';
+        $messageType = 'success';
+    } else {
+        $message = 'Semua kolom harus diisi dengan benar!';
+        $messageType = 'error';
+    }
+}
+
+// ==============================
+// PROSES: HAPUS TRANSAKSI
+// ==============================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi']) && $_POST['aksi'] === 'hapus') {
+    $idHapus = (int) ($_POST['id'] ?? 0);
+
+    if ($idHapus > 0) {
+        $transaksi = bacaTransaksi($dataFile);
+        // Filter: simpan semua kecuali yang dihapus
+        $transaksi = array_values(array_filter($transaksi, fn($t) => $t['id'] !== $idHapus));
+        simpanTransaksi($dataFile, $transaksi);
+        $message = 'Transaksi berhasil dihapus!';
+        $messageType = 'success';
+    }
+}
+
+// Baca ulang data setelah proses
+$transactions = bacaTransaksi($dataFile);
+
+// Hitung saldo
+$totalPemasukan = 0;
+$totalPengeluaran = 0;
+foreach ($transactions as $t) {
+    if ($t['jenis'] === 'pemasukan') $totalPemasukan += $t['jumlah'];
+    else $totalPengeluaran += $t['jumlah'];
+}
+$saldo = $totalPemasukan - $totalPengeluaran;
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin — Kas Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+<!-- NAVBAR -->
+<nav class="bg-green-700 shadow-lg sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div>
+            <h1 class="text-white font-bold text-base sm:text-lg">💰 Dashboard Admin</h1>
+            <p class="text-green-200 text-xs">Sistem Kas Digital — Nurul Bayan</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href__="index.php"
+               class="px-3 py-2 text-sm text-white bg-white/10 hover:bg-white/20 rounded-lg transition">
+                👁 Lihat Halaman Siswa
+            </a>
+            <a href__="logout.php"
+               class="px-3 py-2 text-sm text-white bg-white/10 hover:bg-white/20 rounded-lg transition">
+                🚪 Logout
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- Notifikasi -->
+    <?php if ($message): ?>
+        <div class="mb-6 px-4 py-3 rounded-xl text-sm font-medium
+            <?= $messageType === 'success' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-600 border border-red-200' ?>">
+            <?= $messageType === 'success' ? '✅' : '⚠️' ?> <?= htmlspecialchars($message) ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- KARTU SALDO -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div class="bg-green-700 rounded-2xl p-6 text-white shadow-lg">
+            <p class="text-green-200 text-sm mb-1">💳 Saldo Kas</p>
+            <p class="text-3xl font-bold"><?= formatRupiah($saldo) ?></p>
+            <p class="text-green-200 text-xs mt-2"><?= count($transactions) ?> transaksi</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow border border-gray-100">
+            <p class="text-gray-500 text-sm mb-1">⬆️ Total Pemasukan</p>
+            <p class="text-2xl font-bold text-green-600"><?= formatRupiah($totalPemasukan) ?></p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow border border-gray-100">
+            <p class="text-gray-500 text-sm mb-1">⬇️ Total Pengeluaran</p>
+            <p class="text-2xl font-bold text-red-500"><?= formatRupiah($totalPengeluaran) ?></p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- FORM TAMBAH -->
+        <div class="bg-white rounded-2xl shadow border border-gray-100 lg:col-span-1">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="font-semibold text-gray-800">➕ Tambah Transaksi</h3>
+            </div>
+            <div class="p-6">
+                <form method="POST" action="dashboard.php" class="space-y-4">
+                    <input type="hidden" name="aksi" value="tambah">
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
+                        <input type="date" name="tanggal"
+                               value="<?= date('Y-m-d') ?>" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Jenis</label>
+                        <select name="jenis"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
+                            <option value="pemasukan">Pemasukan</option>
+                            <option value="pengeluaran">Pengeluaran</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
+                        <input type="text" name="keterangan"
+                               placeholder="Contoh: Iuran kas minggu ke-1"
+                               required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Jumlah (Rp)</label>
+                        <input type="number" name="jumlah"
+                               placeholder="50000" min="1" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="w-full bg-green-700 hover:bg-green-800 text-white font-semibold py-2.5 rounded-xl transition">
+                        ➕ Tambah Transaksi
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- TABEL RIWAYAT -->
+        <div class="bg-white rounded-2xl shadow border border-gray-100 lg:col-span-2 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="font-semibold text-gray-800">📋 Riwayat Transaksi</h3>
+                <p class="text-xs text-gray-400 mt-0.5">Klik tombol hapus untuk menghapus transaksi</p>
+            </div>
+
+            <?php if (empty($transactions)): ?>
+                <div class="text-center py-16 text-gray-400">
+                    <p class="text-4xl mb-3">📭</p>
+                    <p>Belum ada transaksi</p>
+                </div>
+            <?php else: ?>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">No</th>
+                                <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Tanggal</th>
+                                <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Keterangan</th>
+                                <th class="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Jenis</th>
+                                <th class="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Jumlah</th>
+                                <th class="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Hapus</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($transactions as $i => $t): ?>
+                                <tr class="border-t border-gray-50 hover:bg-gray-50 transition">
+                                    <td class="py-3 px-4 text-sm text-gray-400"><?= $i + 1 ?></td>
+                                    <td class="py-3 px-4 text-sm"><?= date('d/m/Y', strtotime($t['tanggal'])) ?></td>
+                                    <td class="py-3 px-4 text-sm font-medium"><?= htmlspecialchars($t['keterangan']) ?></td>
+                                    <td class="py-3 px-4">
+                                        <?php if ($t['jenis'] === 'pemasukan'): ?>
+                                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">⬆ Masuk</span>
+                                        <?php else: ?>
+                                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-600">⬇ Keluar</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="py-3 px-4 text-sm font-semibold text-right
+                                        <?= $t['jenis'] === 'pemasukan' ? 'text-green-600' : 'text-red-500' ?>">
+                                        <?= $t['jenis'] === 'pemasukan' ? '+' : '-' ?>
+                                        <?= formatRupiah($t['jumlah']) ?>
+                                    </td>
+                                    <td class="py-3 px-4 text-center">
+                                        <!-- Form hapus dengan konfirmasi JavaScript -->
+                                        <form method="POST" action="dashboard.php"
+                                              onsubmit="return confirm('Yakin ingin menghapus transaksi: <?= htmlspecialchars($t['keterangan']) ?>?')">
+                                            <input type="hidden" name="aksi" value="hapus">
+                                            <input type="hidden" name="id" value="<?= $t['id'] ?>">
+                                            <button type="submit"
+                                                    class="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
+                                                🗑️
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<footer class="text-center py-6 mt-8 text-gray-400 text-sm border-t">
+    &copy; <?= date('Y') ?> Sistem Kas Digital — Kelas XII SMA Informatika Nurul Bayan
+</footer>
+
+</body>
+</html>
+📄 6. logout.php
+<?php
+/**
+ * logout.php — Proses Logout Admin
+ * Menghapus session dan redirect ke halaman utama
+ */
+
+session_start();
+
+// Hapus semua data session
+session_unset();
+session_destroy();
+
+// Redirect ke halaman utama
+header("Location: index.php");
+exit();
+?>
+🚀 CARA MENJALANKAN DI XAMPP / LARAGON
+✅ Menggunakan XAMPP:
+1. Install XAMPP → https://www.apachefriends.org/
+2. Buka XAMPP Control Panel
+3. Klik START pada: Apache
+4. Buka folder: C:\xampp\htdocs\
+5. Buat folder baru: C:\xampp\htdocs\kas-digital\
+6. Masukkan semua file (.php dan .json) ke dalam folder tersebut
+7. Buka browser → ketik: http://localhost/kas-digital/
+✅ Menggunakan Laragon:
+1. Install Laragon → https://laragon.org/
+2. Klik tombol "Start All"
+3. Buka folder: C:\laragon\www\
+4. Buat folder baru: C:\laragon\www\kas-digital\
+5. Masukkan semua file ke dalam folder tersebut
+6. Buka browser → ketik: http://kas-digital.test/
+   (atau: http://localhost/kas-digital/)
+💻 CARA BUKA & EDIT DI VS CODE
+1. Buka VS Code
+2. File → Open Folder → pilih folder "kas-digital"
+3. Install ekstensi yang direkomendasikan:
+   - PHP Intelephense (autocomplete PHP)
+   - Tailwind CSS IntelliSense
+   - Prettier - Code formatter
+4. Edit file sesuai kebutuhan
+5. Simpan (Ctrl+S) → langsung refresh browser
+🔧 Cara Mengubah Kode:
+Yang ingin diubah	File yang diedit
+Ubah username/password	login.php → cari baris if ($username === 'nuba' && $password === '123')
+Ubah judul website	index.php dan dashboard.php → cari tag <title> dan <h1>
+Ubah warna hijau	Ganti green-700 menjadi warna lain (mis. blue-700) di semua file
+Tambah kolom tabel	Edit bagian <table> di index.php dan dashboard.php
+Ubah data awal	Edit file transactions.json langsung
+Ubah format tanggal	Cari date('d F Y', ...) di PHP → ganti format sesuai kebutuhan
+Catatan: Website versi PHP ini dijalankan di XAMPP/Laragon, sedangkan yang tampil di preview ini adalah versi React (Base44). Keduanya memiliki fitur dan tampilan yang sama persis — pilih sesuai kebutuhan presentasi KTI Anda! 🎓
+
+a month ago
+kalo data nya dari json trus apa fungsi mysql? dan apa isinya
+
+a month ago
+
+
+Revert
+
+Base44 AI
+Base44
+
+
+Thought for less than a second
+Pertanyaan bagus! Ini penjelasannya:
+
+📁 JSON vs 🗄️ MySQL — Apa Bedanya?
+Di proyek KTI kamu, data disimpan di transactions.json
+Artinya tidak pakai MySQL sama sekali. JSON hanyalah file teks biasa yang berisi data.
+
+🤔 Lalu apa fungsi MySQL?
+MySQL adalah database sungguhan yang digunakan jika proyek kamu lebih besar/profesional. Bedanya:
+
+Fitur	transactions.json	MySQL
+Penyimpanan	File .json di folder	Server database terpisah
+Kecepatan	Lambat jika data banyak	Cepat meski jutaan data
+Keamanan	Mudah diedit manual	Terlindungi dengan password
+Pencarian	Harus baca semua data	Bisa filter/query spesifik
+Multi-user	Bisa konflik/bentrok	Aman diakses banyak user
+Cocok untuk	Proyek kecil / KTI	Aplikasi nyata / production
+📦 Isi MySQL (jika pakai)
+Kalau pakai MySQL, kamu akan punya tabel seperti ini:
+
+-- Nama database
+CREATE DATABASE kas_digital;
+
+-- Tabel transaksi (pengganti transactions.json)
+CREATE TABLE transactions (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    tanggal     DATE NOT NULL,
+    keterangan  VARCHAR(255) NOT NULL,
+    jenis       ENUM('pemasukan', 'pengeluaran') NOT NULL,
+    jumlah      BIGINT NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+✅ Kesimpulan untuk KTI kamu
+Proyek kamu sudah benar menggunakan transactions.json — untuk skala KTI/siswa itu cukup dan valid. MySQL baru diperlukan kalau aplikasinya dipakai banyak orang secara bersamaan atau datanya sangat besar.
+
+Kamu tetap bisa menyebut di KTI: "Sistem ini menggunakan penyimpanan berbasis JSON yang ringan dan mudah diimplementasikan tanpa konfigurasi database tambahan." 👍
+
+a month ago
+eumh gitu ya jadi website ini tidak menggunakan my SQL jadi pada saat menambah kan data di dashboard admin otomatis dana nya ke simpan ke tra
